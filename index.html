@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Coffee Timer — 30 min</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1a100a;
+      --bg2: #241509;
+      --surface: #2e1b0e;
+      --border: rgba(200,140,80,0.18);
+      --border2: rgba(200,140,80,0.35);
+      --gold: #c8865a;
+      --gold2: #e8a96e;
+      --cream: #f5ede0;
+      --cream2: #e8d8c2;
+      --muted: rgba(245,237,224,0.45);
+      --red: #c0392b;
+      --coffee-full: #3d1c0a;
+      --coffee-dark: #5c2a10;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--cream);
+      font-family: 'DM Mono', monospace;
+      overflow-x: hidden;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      position: relative;
+    }
+
+    /* Background grain texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* Radial warm glow behind mug */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(600px, 90vw);
+      height: min(600px, 90vw);
+      background: radial-gradient(circle, rgba(160,80,30,0.12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      width: min(520px, 96vw);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: clamp(2rem, 5vw, 3.5rem) clamp(1.5rem, 6vw, 4rem);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      opacity: 0;
+      transform: translateY(18px) scale(0.98);
+      animation: cardIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes cardIn {
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes mugFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    .mug-wrap.running {
+      animation: mugFloat 4s ease-in-out infinite;
+    }
+
+    @keyframes borderGlow {
+      0%, 100% { border-color: var(--border); box-shadow: 0 0 0 rgba(200,140,80,0); }
+      50% { border-color: var(--border2); box-shadow: 0 0 32px rgba(200,134,90,0.08); }
+    }
+
+    .card.running {
+      animation: cardIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards, borderGlow 5s ease-in-out infinite 0.8s;
+    }
+
+    .eyebrow {
+      font-size: clamp(10px, 2.2vw, 12px);
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+      opacity: 0.8;
+    }
+
+    /* MUG */
+    .mug-wrap {
+      width: min(260px, 65vw);
+      height: min(280px, 70vw);
+      margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+      position: relative;
+    }
+
+    .mug-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* Steam */
+    .steam {
+      stroke: var(--cream2);
+      stroke-width: 2.5;
+      fill: none;
+      stroke-linecap: round;
+    }
+
+    .steam-anim {
+      animation: steamUp 2.8s ease-in-out infinite;
+      transform-origin: center bottom;
+    }
+    .steam-anim:nth-child(2) { animation-delay: 0.7s; }
+    .steam-anim:nth-child(3) { animation-delay: 1.4s; }
+
+    @keyframes steamUp {
+      0%   { opacity: 0; transform: translateY(4px) scaleX(1); }
+      20%  { opacity: 0.55; }
+      60%  { opacity: 0.3; transform: translateY(-18px) scaleX(1.3); }
+      100% { opacity: 0; transform: translateY(-32px) scaleX(0.7); }
+    }
+
+    .steam-group { transition: opacity 0.8s ease; }
+    .steam-group.hidden { opacity: 0; pointer-events: none; }
+
+    /* TIME */
+    .time-block {
+      text-align: center;
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+    }
+
+    .time-digits {
+      font-size: clamp(56px, 16vw, 96px);
+      font-weight: 300;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      color: var(--cream);
+      transition: color 0.4s;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .time-digits.urgent {
+      color: var(--red);
+      animation: urgentBlink 0.9s ease-in-out infinite;
+    }
+
+    @keyframes urgentBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .time-label {
+      font-size: clamp(11px, 2.5vw, 13px);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+
+    /* PROGRESS BAR */
+    .progress-wrap {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 100px;
+      margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--coffee-dark), var(--gold), var(--coffee-dark));
+      background-size: 200% 100%;
+      border-radius: 100px;
+      transition: width 1s linear;
+      width: 0%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill.running {
+      animation: shimmerMove 2.2s linear infinite;
+    }
+
+    @keyframes shimmerMove {
+      0% { background-position: 0% 0%; }
+      100% { background-position: -200% 0%; }
+    }
+
+    /* DONE MESSAGE */
+    .done-msg {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: clamp(14px, 3.5vw, 17px);
+      color: var(--gold2);
+      text-align: center;
+      min-height: 28px;
+      margin-bottom: 1rem;
+      letter-spacing: 0.02em;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.5s, transform 0.5s;
+    }
+
+    .done-msg.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* CONTROLS */
+    .controls {
+      display: flex;
+      gap: clamp(10px, 3vw, 16px);
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn {
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(11px, 2.8vw, 13px);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: clamp(12px, 3vw, 16px) clamp(24px, 7vw, 40px);
+      border-radius: 100px;
+      cursor: pointer;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--cream);
+      transition: all 0.18s ease;
+      min-width: clamp(100px, 28vw, 140px);
+    }
+
+    .btn:hover { background: rgba(200,134,90,0.12); border-color: var(--gold); }
+    .btn:active { transform: scale(0.96); }
+
+    .btn.primary {
+      background: var(--gold);
+      color: var(--bg);
+      border-color: var(--gold);
+      font-weight: 500;
+    }
+
+    .btn.primary:hover { background: var(--gold2); border-color: var(--gold2); }
+
+    .btn.primary.running {
+      animation: btnPulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes btnPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(200,134,90,0.35); }
+      50% { box-shadow: 0 0 0 8px rgba(200,134,90,0); }
+    }
+
+    .time-digits.tick {
+      animation: tickPulse 0.4s ease;
+    }
+
+    @keyframes tickPulse {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.035); }
+      100% { transform: scale(1); }
+    }
+
+    /* FOOTER */
+    .footer-note {
+      margin-top: clamp(1.5rem, 4vw, 2.5rem);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: rgba(245,237,224,0.2);
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .copyright {
+      margin-top: clamp(1.5rem, 4vw, 2rem);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: rgba(245,237,224,0.28);
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 400px) {
+      .card { border-radius: 16px; }
+      .controls { gap: 8px; }
+    }
+
+    @media (min-width: 900px) {
+      .card {
+        width: 540px;
+        padding: 4rem 5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="eyebrow">Coffee Break Timer</div>
+
+  <div class="mug-wrap" id="mugWrap">
+    <svg class="mug-svg" viewBox="0 0 260 280" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="mugClip">
+          <path d="M38,60 L44,210 Q130,228 216,210 L222,60 Z"/>
+        </clipPath>
+      </defs>
+
+      <!-- Steam group -->
+      <g class="steam-group" id="steamGroup">
+        <path class="steam steam-anim" d="M88,50 C84,41 92,33 88,24"/>
+        <path class="steam steam-anim" d="M113,44 C109,35 117,27 113,18"/>
+        <path class="steam steam-anim" d="M138,50 C134,41 142,33 138,24"/>
+      </g>
+
+      <!-- Mug body back fill -->
+      <path d="M38,60 L44,210 Q130,228 216,210 L222,60 Z"
+        fill="#1e0f07"
+        stroke="rgba(200,134,90,0.3)"
+        stroke-width="1.5"/>
+
+      <!-- Coffee liquid (fills from bottom, drains from top) -->
+      <rect id="coffeeRect" x="36" y="60" width="188" height="152"
+        fill="#3d1c0a"
+        clip-path="url(#mugClip)"/>
+
+      <!-- Coffee surface shine layer -->
+      <ellipse id="coffeeSurface" cx="130" cy="60" rx="92" ry="10"
+        fill="#5c2a10" opacity="0.95"
+        clip-path="url(#mugClip)"/>
+
+      <!-- Mug rim ellipse -->
+      <ellipse cx="130" cy="60" rx="92" ry="14"
+        fill="#281508"
+        stroke="rgba(200,134,90,0.4)"
+        stroke-width="1.5"/>
+
+      <!-- Handle outer -->
+      <path d="M216,100 C262,100 268,180 216,180"
+        fill="none"
+        stroke="rgba(200,134,90,0.35)"
+        stroke-width="12"
+        stroke-linecap="round"/>
+
+      <!-- Handle inner cutout -->
+      <path d="M216,100 C256,100 262,180 216,180"
+        fill="none"
+        stroke="#1e0f07"
+        stroke-width="6"
+        stroke-linecap="round"/>
+
+      <!-- Decorative band on mug -->
+      <path d="M44,128 Q130,140 216,128"
+        fill="none"
+        stroke="rgba(200,134,90,0.15)"
+        stroke-width="1"/>
+
+      <!-- Saucer shadow -->
+      <ellipse cx="130" cy="224" rx="100" ry="12"
+        fill="rgba(0,0,0,0.35)"/>
+
+      <!-- Saucer -->
+      <ellipse cx="130" cy="220" rx="108" ry="16"
+        fill="#281508"
+        stroke="rgba(200,134,90,0.3)"
+        stroke-width="1"/>
+
+      <!-- Mug bottom plate -->
+      <path d="M44,210 Q130,228 216,210"
+        fill="none"
+        stroke="rgba(200,134,90,0.25)"
+        stroke-width="1"/>
+    </svg>
+  </div>
+
+  <div class="time-block">
+    <div class="time-digits" id="timeDisplay">30:00</div>
+    <div class="time-label" id="timeLabel">30 minutes remaining</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <div class="done-msg" id="doneMsg">Your coffee break is over — back to it!</div>
+
+  <div class="controls">
+    <button class="btn primary" id="startBtn" onclick="toggleTimer()">Start</button>
+    <button class="btn" onclick="resetTimer()">Reset</button>
+  </div>
+
+  <div class="footer-note">☕ 30 min · tap start to begin</div>
+</div>
+
+<div class="copyright">© 2026 Protected by Abhicism</div>
+
+<script>
+  const TOTAL = 30 * 60;
+  let remaining = TOTAL;
+  let running = false;
+  let iv = null;
+
+  const mugTop = 60;
+  const mugBottom = 212;
+  const mugH = mugBottom - mugTop;
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function updateMug(rem) {
+    const frac = rem / TOTAL;
+    const liquidH = mugH * frac;
+    const topY = mugBottom - liquidH;
+
+    const rect = document.getElementById('coffeeRect');
+    rect.setAttribute('y', topY);
+    rect.setAttribute('height', liquidH + 2);
+
+    const surf = document.getElementById('coffeeSurface');
+    surf.setAttribute('cy', topY);
+
+    // Color: rich dark brown → pale amber dregs
+    const r = Math.round(lerp(120, 61, frac));
+    const g = Math.round(lerp(60, 28, frac));
+    const b = Math.round(lerp(20, 10, frac));
+    rect.setAttribute('fill', `rgb(${r},${g},${b})`);
+    surf.setAttribute('fill', `rgb(${r+28},${g+14},${b+6})`);
+
+    // Steam visibility
+    const steam = document.getElementById('steamGroup');
+    if (frac > 0.12 && running) {
+      steam.classList.remove('hidden');
+    } else {
+      steam.classList.add('hidden');
+    }
+  }
+
+  function fmt(sec) {
+    return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
+  }
+
+  function updateUI() {
+    const el = document.getElementById('timeDisplay');
+    el.textContent = fmt(remaining);
+    el.classList.toggle('urgent', remaining <= 60 && remaining > 0);
+    el.classList.remove('tick');
+    void el.offsetWidth; // restart animation
+    el.classList.add('tick');
+
+    const lbl = document.getElementById('timeLabel');
+    const elapsed = TOTAL - remaining;
+    const pct = Math.round((elapsed / TOTAL) * 100);
+    if (remaining === TOTAL) lbl.textContent = '30 minutes remaining';
+    else if (remaining === 0) lbl.textContent = 'Time\'s up!';
+    else {
+      const mins = Math.ceil(remaining / 60);
+      lbl.textContent = `${mins} min left · ${pct}% elapsed`;
+    }
+
+    // Progress bar: fill = elapsed fraction
+    const fill = document.getElementById('progressFill');
+    fill.style.width = `${Math.round((elapsed / TOTAL) * 100)}%`;
+    fill.classList.toggle('running', running);
+
+    document.getElementById('card').classList.toggle('running', running);
+    document.getElementById('mugWrap').classList.toggle('running', running);
+    document.getElementById('startBtn').classList.toggle('running', running && remaining > 0);
+
+    updateMug(remaining);
+  }
+
+  function toggleTimer() {
+    const btn = document.getElementById('startBtn');
+    const done = document.getElementById('doneMsg');
+    if (remaining === 0) return;
+
+    if (running) {
+      clearInterval(iv);
+      running = false;
+      btn.textContent = 'Resume';
+      document.getElementById('steamGroup').classList.add('hidden');
+    } else {
+      running = true;
+      btn.textContent = 'Pause';
+      done.classList.remove('show');
+      iv = setInterval(() => {
+        remaining--;
+        updateUI();
+        if (remaining === 0) {
+          clearInterval(iv);
+          running = false;
+          btn.textContent = 'Start';
+          done.classList.add('show');
+          document.getElementById('steamGroup').classList.add('hidden');
+        }
+      }, 1000);
+    }
+    updateUI();
+  }
+
+  function resetTimer() {
+    clearInterval(iv);
+    running = false;
+    remaining = TOTAL;
+    document.getElementById('startBtn').textContent = 'Start';
+    document.getElementById('doneMsg').classList.remove('show');
+    document.getElementById('timeDisplay').classList.remove('urgent');
+    document.getElementById('steamGroup').classList.add('hidden');
+    document.getElementById('card').classList.remove('running');
+    document.getElementById('mugWrap').classList.remove('running');
+    document.getElementById('startBtn').classList.remove('running');
+    document.getElementById('progressFill').classList.remove('running');
+    updateUI();
+  }
+
+  updateUI();
+</script>
+</body>
+</html>
